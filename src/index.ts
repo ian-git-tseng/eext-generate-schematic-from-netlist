@@ -224,13 +224,31 @@ async function findDeviceInfo(component: NetlistComponent): Promise<any> {
 	// 如果找不到器件，尝试通过器件名称查找
 	if (component.props.device_name) {
 		eda.sys_Log.add(`尝试通过器件名称查找器件: ${component.props.device_name}`);
-		const devices = await eda.lib_Device.search(component.props.device_name, '1');
-		if (devices && Array.isArray(devices) && devices.length > 0) {
-			eda.sys_Log.add(`通过器件名称找到器件: ${component.props.Designator} - ${devices[0].name}`);
-			return devices[0];
-		} else {
-			eda.sys_Log.add(`器件名称未找到器件: ${component.props.device_name}`);
+
+		// 获取系统库、个人库、工程库的 UUID
+		const libUuids: string[] = [];
+		const systemLibUuid = await eda.lib_LibrariesList.getSystemLibraryUuid();
+		if (systemLibUuid) libUuids.push(systemLibUuid);
+
+		const personalLibUuid = await eda.lib_LibrariesList.getPersonalLibraryUuid();
+		if (personalLibUuid) libUuids.push(personalLibUuid);
+
+		const projectLibUuid = await eda.lib_LibrariesList.getProjectLibraryUuid();
+		if (projectLibUuid) libUuids.push(projectLibUuid);
+
+		// 在每个库中搜索器件
+		for (const libUuid of libUuids) {
+			const devices = await eda.lib_Device.search(component.props.device_name, libUuid);
+			if (devices && Array.isArray(devices) && devices.length > 0) {
+				eda.sys_Log.add(`通过器件名称在库 ${libUuid} 找到器件: ${component.props.Designator} - ${devices[0].name}`);
+				return devices[0];
+			}
 		}
+
+		// 如果在所有库中都未找到，记录错误
+		const errorMsg = `器件名称 "${component.props.device_name}" 在系统库、个人库、工程库中均未找到`;
+		eda.sys_Log.add(errorMsg);
+		eda.sys_Message.showToastMessage(errorMsg, 'warning');
 	}
 
 	eda.sys_Log.add(
